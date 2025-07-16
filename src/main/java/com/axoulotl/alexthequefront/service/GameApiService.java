@@ -1,6 +1,8 @@
 package com.axoulotl.alexthequefront.service;
 
 import com.axoulotl.alexthequefront.entity.in.GameClientDTO;
+import com.axoulotl.alexthequefront.entity.in.PaginatedGamesDTO;
+import com.axoulotl.alexthequefront.entity.out.GameDTO;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
@@ -15,14 +17,14 @@ public class GameApiService {
         this.webClient = webClient;
     }
 
-    public Flux<GameClientDTO> getAllGames() {
+    public Mono<PaginatedGamesDTO> getAllGames(int page, int size) {
         return webClient.get()
-                .uri("/game")
+                .uri("/game?page={page}&size={size}", page, size)
                 .retrieve()
-                .bodyToFlux(GameClientDTO.class);
+                .bodyToMono(PaginatedGamesDTO.class);
     }
 
-    public Mono<GameClientDTO> addGame(GameClientDTO gameDTO) {
+    public Mono<GameClientDTO> addGame(GameDTO gameDTO) {
         return webClient.post()
                 .uri("/game")
                 .bodyValue(gameDTO)
