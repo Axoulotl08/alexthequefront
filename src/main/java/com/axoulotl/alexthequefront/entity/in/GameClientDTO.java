@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -16,5 +17,7 @@ public class GameClientDTO {
     private String name;
     private ConsoleClientDTO console;
     private Boolean inbox;
-    private LocalDateTime creationDate;
+    private LocalDate startDate;
+    private LocalDate endDate;
+    private Long gameTime;
 }
