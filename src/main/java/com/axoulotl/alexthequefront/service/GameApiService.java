@@ -3,6 +3,9 @@ package com.axoulotl.alexthequefront.service;
 import com.axoulotl.alexthequefront.entity.in.GameClientDTO;
 import com.axoulotl.alexthequefront.entity.in.PaginatedGamesDTO;
 import com.axoulotl.alexthequefront.entity.out.GameDTO;
+import com.axoulotl.alexthequefront.entity.out.GameUpdateDTO;
+import com.axoulotl.alexthequefront.error.AlexthequeError;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
@@ -23,13 +26,29 @@ public class GameApiService {
                 .bodyToMono(PaginatedGamesDTO.class);
     }
 
-    public Mono<GameClientDTO> addGame(GameDTO gameDTO) {
+    public Mono<GameDTO> addGame(GameDTO gameDTO) {
         return webClient.post()
                 .uri("/game")
                 .bodyValue(gameDTO)
                 .retrieve()
+                .bodyToMono(GameDTO.class);
+    }
+
+    public Mono<GameClientDTO> getGame(Integer id){
+        return webClient.get()
+                .uri("/game/{id}", id)
+                .retrieve()
                 .bodyToMono(GameClientDTO.class);
     }
 
+    public Mono<GameClientDTO> updateDate(GameUpdateDTO gameUpdateDTO, Integer id){
+        return webClient.patch()
+                .uri("/game/{id}", id)
+                .bodyValue(gameUpdateDTO)
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, clientResponse -> clientResponse.bodyToMono(AlexthequeError.class)
+                        .flatMap(error -> Mono.error(new RuntimeException(error.getMessage()))))
+                .bodyToMono(GameClientDTO.class);
+    }
 
 }

@@ -1,15 +1,21 @@
 package com.axoulotl.alexthequefront;
 
+import com.axoulotl.alexthequefront.dialog.GameDetailsDialog;
+import com.axoulotl.alexthequefront.entity.enums.Status;
 import com.axoulotl.alexthequefront.entity.in.ConsoleClientDTO;
 import com.axoulotl.alexthequefront.entity.in.GameClientDTO;
 import com.axoulotl.alexthequefront.entity.out.GameDTO;
+import com.axoulotl.alexthequefront.entity.out.SearchDTO;
 import com.axoulotl.alexthequefront.service.ConsoleApiService;
 import com.axoulotl.alexthequefront.service.GameApiService;
 import com.axoulotl.alexthequefront.service.converter.ConsoleDtoToIdConverter;
+import com.vaadin.flow.component.AttachEvent;
+import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.checkbox.Checkbox;
 import com.vaadin.flow.component.combobox.ComboBox;
+import com.vaadin.flow.component.datepicker.DatePicker;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.Span;
@@ -40,8 +46,18 @@ public class GameView extends VerticalLayout {
     private final ConsoleApiService consoleApiService; // Pour la combobox des consoles
     private final Grid<GameClientDTO> grid = new Grid<>(GameClientDTO.class);
     private final Binder<GameDTO> binder = new BeanValidationBinder<>(GameDTO.class);
+    private final Binder<SearchDTO> binderSearch = new BeanValidationBinder<>(SearchDTO.class);
 
     private List<ConsoleClientDTO> loadedConsoles;
+
+    private GameDetailsDialog gameDetailsDialog;
+
+    // Formulaire recherche
+    private TextField nameFieldSearch = new TextField("Name");
+    private DatePicker datePickerSeatch = new DatePicker();
+    private ComboBox<ConsoleClientDTO> consoleComboBoxSearch = new ComboBox<>("Console");
+    private ComboBox<Status> statusComboBoxSearch = new ComboBox<>("Status");
+    private Button searchButton = new Button("Search");
 
     // Formulaire d'ajout de jeu
     private TextField nameField = new TextField("Game Name");
@@ -66,14 +82,25 @@ public class GameView extends VerticalLayout {
         addClassName("game-view");
         setSizeFull();
 
+        this.gameDetailsDialog = new GameDetailsDialog(gameApiService, consoleApiService);
+
         configureGrid();
         configureForm();
+        configureSearchForm();
         configureNbItemCombox();
+        configureConsoleComboBox(consoleComboBox);
+        configureConsoleComboBox(consoleComboBoxSearch);
+
+        loadConsolesIntoComboBox(consoleComboBox, consoleComboBoxSearch);
+
+        add(new H2("Games List"), nbItemPerPageCombo, createSearchLayout(), grid, createPaginationLayout(), createAddFormLayout());
+
+    }
+
+    @Override
+    protected void onAttach(AttachEvent attachEvent){
+        super.onAttach(attachEvent);
         updateList(currentPage, pageSize);
-        configureConsoleComboBox();
-
-        add(new H2("Games List"), nbItemPerPageCombo, grid, createPaginationLayout(), createAddFormLayout());
-
     }
 
     private void configureNbItemCombox(){
@@ -127,14 +154,84 @@ public class GameView extends VerticalLayout {
                     }
                     return icon;
                 }))
-                .setHeader("In Box") // En-tête de la colonne
-                .setAutoWidth(true); // Ajuste la largeur automatiquement
+                .setHeader("In Box")
+                .setAutoWidth(true);
+
+        grid.addColumn(new ComponentRenderer<>(game -> {
+                    String statusText = game.getStatus() != null ? game.getStatus().name().replace("_", " ") : "N/A"; // Convertit l'enum en texte lisible
+                    String colorClass; // Classe CSS pour la couleur du badge
+
+                    switch (game.getStatus()) {
+                        case TO_START:
+                            colorClass = "badge-blue"; // Ou "primary" si tu veux des couleurs lumo par défaut
+                            break;
+                        case IN_PROGRESS:
+                            colorClass = "badge-success"; // Vert
+                            break;
+                        case DONE:
+                            colorClass = "badge-success"; // Vert
+                            break;
+                        case STOPPED:
+                            colorClass = "badge-error"; // Rouge
+                            break;
+                        case COMPLETE:
+                            colorClass = "badge-success"; // Vert
+                            break;
+                        default:
+                            colorClass = "badge-contrast"; // Couleur par défaut (gris)
+                            break;
+                    }
+
+                    Span statusSpan = new Span(statusText); // Utilise un Span pour le badge
+                    statusSpan.getElement().getThemeList().add("badge"); // Applique le style de badge Lumo par défaut
+                    statusSpan.getElement().getThemeList().add(colorClass); // Ajoute ta classe de couleur personnalisée
+                    statusSpan.getElement().getThemeList().add("small"); // Optionnel : pour un badge plus petit
+
+                    return statusSpan;
+        })).setHeader("Status")
+                .setAutoWidth(true);
+
+        grid.addColumn(new ComponentRenderer<>(game -> {
+            Button detailsButton = new Button(new Icon(VaadinIcon.INFO_CIRCLE)); // Icône pour le détail
+            detailsButton.addClickListener(e -> {
+                // Ouvre la boîte de dialogue avec les détails du jeu
+                // Important : Passe une référence à la GameView pour pouvoir rafraîchir la grille
+                gameDetailsDialog.openDialog(game.getId(), v -> updateList(currentPage, pageSize));
+            });
+            return detailsButton;
+        })).setHeader("Actions").setAutoWidth(true);
+    }
+
+    /**
+     *
+     * @return
+     */
+    private Component createSearchLayout() {
+        HorizontalLayout searchLayout = new HorizontalLayout(nameFieldSearch, datePickerSeatch, consoleComboBoxSearch, statusComboBoxSearch, searchButton);
+        searchLayout.setSpacing(true);
+        searchLayout.setDefaultVerticalComponentAlignment(Alignment.BASELINE);
+
+        return searchLayout;
+    }
+
+
+    private void configureSearchForm() {
+        binderSearch.forField(nameFieldSearch).bind(SearchDTO::getName, SearchDTO::setName);
+        binderSearch.forField(datePickerSeatch).bind(SearchDTO::getStartedDate, SearchDTO::setStartedDate);
+        statusComboBoxSearch.setLabel("Status");
+        statusComboBoxSearch.setItemLabelGenerator(Status::name);
+        statusComboBoxSearch.setItems(Status.values());
+
+        searchButton.addClickListener(buttonClickEvent -> searchGame());
+    }
+
+
+    private void searchGame() {
     }
 
     private void configureForm() {
-        binder.bind(nameField, GameDTO::getName, GameDTO::setName);
+        binder.forField(nameField).asRequired().bind(GameDTO::getName, GameDTO::setName);
         binder.bind(inboxCheckbox, GameDTO::getInbox, GameDTO::setInbox);
-
         consoleComboBox.setItemLabelGenerator(ConsoleClientDTO::getName);
 
         addButton.addClickListener(event -> addGame());
@@ -147,7 +244,8 @@ public class GameView extends VerticalLayout {
         return formLayout;
     }
 
-    private void loadConsolesIntoComboBox() {
+    private void loadConsolesIntoComboBox(ComboBox<ConsoleClientDTO> comboBox,
+                                          ComboBox<ConsoleClientDTO> comboBoxSearch) {
         UI ui = UI.getCurrent();
         if (ui == null) {
             System.err.println("Error: UI is null when trying to load consoles. Cannot update the UI.");
@@ -159,11 +257,15 @@ public class GameView extends VerticalLayout {
                         consoles -> {
                             ui.access(() -> {
                                 this.loadedConsoles = consoles;
-                                consoleComboBox.setItems(consoles); // Remplis la ComboBox
+                                comboBox.setItems(consoles); // Remplis la ComboBox
                                 Notification.show("Liste des consoles chargée.", 1500, Notification.Position.BOTTOM_END);
-                                binder.forField(consoleComboBox)
+                                binder.forField(comboBox)
                                         .withConverter(new ConsoleDtoToIdConverter(this.loadedConsoles)) // <-- IMPORTANT : PASSER LA LISTE
                                         .bind(GameDTO::getConsole, GameDTO::setConsole);
+                                comboBoxSearch.setItems(consoles);
+                                binderSearch.forField(comboBoxSearch)
+                                        .withConverter(new ConsoleDtoToIdConverter(this.loadedConsoles))
+                                        .bind(SearchDTO::getConsoleId, SearchDTO::setConsoleId);
                             });
                         },
                         // Erreur : Problème lors de la récupération des consoles
@@ -176,17 +278,16 @@ public class GameView extends VerticalLayout {
                 );
     }
 
-    private void configureConsoleComboBox() {
-        consoleComboBox.setItemLabelGenerator(console -> {
+    private void configureConsoleComboBox(ComboBox<ConsoleClientDTO> consolesCombo) {
+        consolesCombo.setItemLabelGenerator(console -> {
             if (console == null) {
                 return "";
             }
             return console.getName() + " (" + console.getZone() + ")";
         });
 
-        consoleComboBox.setPlaceholder("Select a console");
+        consolesCombo.setPlaceholder("Select a console");
 
-        loadConsolesIntoComboBox();
     }
 
     private HorizontalLayout createPaginationLayout(){
@@ -194,15 +295,17 @@ public class GameView extends VerticalLayout {
         previousPageButton.addClickListener(buttonClickEvent -> {
            if(currentPage > 0){
                currentPage--;
-               updateList(currentPage, pageSize); //TODO
+               updateList(currentPage, pageSize);
            }
+            Notification.show("Button Value = " + currentPage, 1500, Notification.Position.MIDDLE);
         });
 
         nextPageButton.addClickListener(buttonClickEvent -> {
             if(currentPage < totalPages - 1){
                 currentPage++;
-                updateList(currentPage, pageSize); //TODO
+                updateList(currentPage, pageSize);
             }
+            Notification.show("Button Value = " + currentPage, 1500, Notification.Position.MIDDLE);
         });
 
         updatePaginationButtonStates();
